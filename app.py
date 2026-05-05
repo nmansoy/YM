@@ -3,6 +3,13 @@ import pandas as pd
 import io
 import json
 import os
+from decimal import Decimal, ROUND_HALF_UP
+
+# --- Excel Tarzı Kesin Yuvarlama Fonksiyonu ---
+def excel_yuvarla(deger, basamak=2):
+    """Excel'in YUVARLA formülü ile birebir aynı çalışan fonksiyon"""
+    format_str = '1.' + '0' * basamak if basamak > 0 else '1'
+    return float(Decimal(str(deger)).quantize(Decimal(format_str), rounding=ROUND_HALF_UP))
 
 # --- Veri Saklama (JSON) Fonksiyonları ---
 DATA_FILE = "endeksler.json"
@@ -26,8 +33,8 @@ AYLAR = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağu
 YILLAR = [str(y) for y in range(2022, 2035)]
 
 # --- Sayfa Ayarları ---
-st.set_page_config(page_title="AYAP Maliyet Hesaplama", layout="wide")
-st.title("📊 İş Bazlı Yaklaşık Maliyet Hesaplama Aracı")
+st.set_page_config(page_title="AYAP Detaylı Maliyet Hesaplama", layout="wide")
+st.title("📊 AYAP Kalem Kalem Maliyet Hesaplama Aracı")
 
 # --- Sol Menü (Parametreler) ---
 st.sidebar.header("⚙️ Temel Parametreler")
@@ -62,7 +69,7 @@ st.sidebar.markdown("---")
 kar_orani = st.sidebar.number_input("Yüklenici Kârı (%)", value=20.0, step=1.0)
 kdv_orani = st.sidebar.number_input("KDV Oranı (%)", value=20.0, step=1.0)
 
-# --- 1. Adım: Güncel Katsayı ve Fiyat Hesaplaması ---
+# --- Güncel Katsayı ve Fiyat Hesaplaması ---
 katsayi = guncel_endeks / base_endeks
 guncel_bina = base_bina * katsayi
 guncel_pafta = base_pafta * katsayi
@@ -71,98 +78,142 @@ st.info(f"📈 **Uygulanan Endeks Çarpanı:** `{katsayi:.5f}` | "
         f"**Güncel Bina Baz Fiyatı:** `{guncel_bina:,.4f} TL` | "
         f"**Güncel Pafta Baz Fiyatı:** `{guncel_pafta:,.4f} TL`")
 
-# --- 2. Adım: Senaryo Seçimi ---
+# --- Senaryo Seçimi ve Veri Girişi ---
 st.markdown("### 🛠️ İş Türü (Senaryo) Seçimi")
 is_senaryosu = st.radio(
-    "Hangi tür iş için yaklaşık maliyet hesaplıyorsunuz?",
-    ("🏗️ Oluşturma İşi (Sıfırdan Üretim)", "🔧 İyileştirme İşi (Kontrol ve Revizyon)"),
+    "Hangi tür iş için kalem kalem maliyet hesaplıyorsunuz?",
+    ("🔧 İyileştirme İşi (Kontrol ve Revizyon)", "🏗️ Oluşturma İşi (Sıfırdan Üretim)"),
     horizontal=True
 )
-
 st.markdown("---")
-st.subheader("📋 İş Bilgileri ve Miktarlar")
 
-# Senaryoya göre tablo veri yapısını belirle
-if "df_olusturma" not in st.session_state:
-    st.session_state.df_olusturma = pd.DataFrame({"İş Bilgisi / Adı": ["Örnek İlçe"], "Pafta Sayısı": [10], "Bina Sayısı": [500]})
-if "df_iyilestirme" not in st.session_state:
-    st.session_state.df_iyilestirme = pd.DataFrame({
-        "İş Bilgisi / Adı": ["Örnek İlçe"], 
-        "Pafta Sayısı": [10], 
-        "Toplam Kontrol Bina": [172639], 
-        "Sıfırdan Üretilecek Bina": [55126]
-    })
+detaylar = [] # Tablo verilerini tutacağımız liste
 
-# --- 3. Adım: Veri Girişi ve Hesaplamalar ---
-if "Oluşturma" in is_senaryosu:
-    st.write("Aşağıdaki tabloya **Oluşturma İşi** için geçerli Pafta ve Bina sayılarını girin.")
-    edited_df = st.data_editor(st.session_state.df_olusturma, num_rows="dynamic", use_container_width=True, hide_index=True)
+# --- İYİLEŞTİRME SENARYOSU HESAPLAMALARI ---
+if is_senaryosu == "🔧 İyileştirme İşi (Kontrol ve Revizyon)":
+    st.subheader("📋 İyileştirme İşi Miktarları")
+    col1, col2, col3 = st.columns(3)
+    pafta_sayisi = col1.number_input("Pafta Sayısı", min_value=0, value=7280)
+    toplam_bina = col2.number_input("Toplam Kontrol Edilecek Bina Sayısı", min_value=0, value=172639)
+    sifir_bina = col3.number_input("Sıfırdan Üretilecek Bina Sayısı", min_value=0, value=55126)
     
-    if not edited_df.empty:
-        sonuc_df = edited_df.copy()
-        for col in ["Pafta Sayısı", "Bina Sayısı"]:
-            sonuc_df[col] = pd.to_numeric(sonuc_df[col]).fillna(0)
-            
-        sonuc_df["Çıplak Maliyet (TL)"] = (sonuc_df["Bina Sayısı"] * guncel_bina) + (sonuc_df["Pafta Sayısı"] * guncel_pafta)
-
-elif "İyileştirme" in is_senaryosu:
-    st.write("Aşağıdaki tabloya **İyileştirme İşi** için sayıları girin. *(Eski model kontrol edilecek bina sayısı otomatik hesaplanır).*")
-    edited_df = st.data_editor(st.session_state.df_iyilestirme, num_rows="dynamic", use_container_width=True, hide_index=True)
+    eski_bina = toplam_bina - sifir_bina
+    st.info(f"ℹ️ **Eski Model Bina Sayısı (Otomatik Hesaplandı):** {eski_bina}")
     
-    if not edited_df.empty:
-        sonuc_df = edited_df.copy()
-        for col in ["Pafta Sayısı", "Toplam Kontrol Bina", "Sıfırdan Üretilecek Bina"]:
-            sonuc_df[col] = pd.to_numeric(sonuc_df[col]).fillna(0)
+    iyilestirme_kalemleri = [
+        {"Sıra": 1, "İş Kalemi": "Daha Önce Üretime Dahil Olan/Olmayan Mimari Kontrolü", "Tür": "Bina", "Oran": 0.05, "Miktar_Tipi": "Toplam", "Basamak": 2},
+        {"Sıra": 2, "İş Kalemi": "Nadir ve Eğik Hava Fotoğraflarının Dengelenmesi", "Tür": "Pafta", "Oran": 0.10, "Miktar_Tipi": "Pafta", "Basamak": 2},
+        {"Sıra": 3, "İş Kalemi": "SYM, SAM, Nokta Bulutu, Mesh Model Üretimi", "Tür": "Pafta", "Oran": 0.27, "Miktar_Tipi": "Pafta", "Basamak": 2},
+        {"Sıra": 4, "İş Kalemi": "Eksik, Hatalı ve Yeni Yapılar 3B Vektör (%15)", "Tür": "Pafta", "Oran": 0.15, "Miktar_Tipi": "Pafta", "Basamak": 2},
+        {"Sıra": 5, "İş Kalemi": "Yeni Yapıların Kaplanması ve CityGML Dönüşümü", "Tür": "Pafta", "Oran": 0.27, "Miktar_Tipi": "Pafta", "Basamak": 2},
+        {"Sıra": 6, "İş Kalemi": "Mimari Projelerden Vektörel Veri Üretimi", "Tür": "Bina", "Oran": 0.40, "Miktar_Tipi": "Sıfır", "Basamak": 2},
+        {"Sıra": 7, "İş Kalemi": "Eski Modellerin Kontrolü ve İyileştirilmesi", "Tür": "Bina", "Oran": 0.20, "Miktar_Tipi": "Eski", "Basamak": 3},
+        {"Sıra": 8, "İş Kalemi": "Karşılıklı Kontrol, Hataların Giderilmesi", "Tür": "Bina", "Oran": 0.20, "Miktar_Tipi": "Toplam", "Basamak": 3},
+        {"Sıra": 9, "İş Kalemi": "TKGM CityGML Veri Modeline Dönüştürülmesi", "Tür": "Bina", "Oran": 0.35, "Miktar_Tipi": "Toplam", "Basamak": 2},
+        {"Sıra": 10, "İş Kalemi": "Veri ve Modellerin İdareye Teslim Edilmesi", "Tür": "Pafta", "Oran": 0.06, "Miktar_Tipi": "Pafta", "Basamak": 2},
+    ]
+    
+    for k in iyilestirme_kalemleri:
+        if k["Miktar_Tipi"] == "Pafta": miktar = pafta_sayisi
+        elif k["Miktar_Tipi"] == "Toplam": miktar = toplam_bina
+        elif k["Miktar_Tipi"] == "Sıfır": miktar = sifir_bina
+        elif k["Miktar_Tipi"] == "Eski": miktar = eski_bina
         
-        # Matematiksel Mantık
-        sonuc_df["Eski Model Bina (Oto)"] = sonuc_df["Toplam Kontrol Bina"] - sonuc_df["Sıfırdan Üretilecek Bina"]
+        baz_fiyat = guncel_pafta if k["Tür"] == "Pafta" else guncel_bina
+        birim_fiyat = excel_yuvarla(baz_fiyat * k["Oran"], k["Basamak"])
+        toplam_fiyat = excel_yuvarla(birim_fiyat * miktar, 2)
         
-        # Pafta Maliyeti (Kalem 4 yarı yarıya düştüğü için %85)
-        pafta_maliyeti = sonuc_df["Pafta Sayısı"] * (guncel_pafta * 0.85)
-        
-        # Bina Maliyeti (Parçalı)
-        bina_maliyeti = (
-            (sonuc_df["Toplam Kontrol Bina"] * guncel_bina * 0.60) +   # Kalem 1, 8, 9
-            (sonuc_df["Sıfırdan Üretilecek Bina"] * guncel_bina * 0.40) + # Kalem 6
-            (sonuc_df["Eski Model Bina (Oto)"] * guncel_bina * 0.20)     # Kalem 7 (Ekstra)
-        )
-        
-        sonuc_df["Çıplak Maliyet (TL)"] = pafta_maliyeti + bina_maliyeti
+        detaylar.append({
+            "Sıra No": k["Sıra"],
+            "İş Kalemi Açıklaması": k["İş Kalemi"],
+            "Birim": "Adet",
+            "Miktar": miktar,
+            "Birim Fiyat (TL)": birim_fiyat,
+            "Toplam Tutar (TL)": toplam_fiyat
+        })
 
-# --- 4. Adım: Kâr/KDV Ekleme ve Gösterme ---
-if not edited_df.empty:
-    sonuc_df[f"Kar Dahil Y. Maliyet (KDV'siz) (+%{int(kar_orani)})"] = sonuc_df["Çıplak Maliyet (TL)"] * (1 + kar_orani / 100)
-    sonuc_df[f"Toplam Tutar (KDV'li) (+%{int(kdv_orani)})"] = sonuc_df[f"Kar Dahil Y. Maliyet (KDV'siz) (+%{int(kar_orani)})"] * (1 + kdv_orani / 100)
-
-    st.subheader("💰 Hesaplanan Kesin Maliyetler Tablosu")
-    format_dict = {
-        "Çıplak Maliyet (TL)": "{:,.2f} ₺",
-        f"Kar Dahil Y. Maliyet (KDV'siz) (+%{int(kar_orani)})": "{:,.2f} ₺",
-        f"Toplam Tutar (KDV'li) (+%{int(kdv_orani)})": "{:,.2f} ₺"
-    }
-    st.dataframe(sonuc_df.style.format(format_dict), use_container_width=True, hide_index=True)
-
-    genel_kdv_siz = sonuc_df[f"Kar Dahil Y. Maliyet (KDV'siz) (+%{int(kar_orani)})"].sum()
-    genel_kdv_li = sonuc_df[f"Toplam Tutar (KDV'li) (+%{int(kdv_orani)})"].sum()
-
+# --- OLUŞTURMA SENARYOSU HESAPLAMALARI ---
+elif is_senaryosu == "🏗️ Oluşturma İşi (Sıfırdan Üretim)":
+    st.subheader("📋 Oluşturma İşi Miktarları")
     col1, col2 = st.columns(2)
-    col1.metric("📌 GENEL TOPLAM (KDV'SİZ)", f"{genel_kdv_siz:,.2f} TL")
-    col2.metric("📌 GENEL TOPLAM (KDV'Lİ)", f"{genel_kdv_li:,.2f} TL")
+    pafta_sayisi = col1.number_input("Pafta Sayısı", min_value=0, value=7280)
+    bina_sayisi = col2.number_input("Toplam Bina Sayısı", min_value=0, value=172639)
+    
+    olusturma_kalemleri = [
+        {"Sıra": 1, "İş Kalemi": "Mimari Proje İnceleme ve Raporlama", "Tür": "Bina", "Oran": 0.05, "Basamak": 2},
+        {"Sıra": 2, "İş Kalemi": "Nadir ve Eğik Hava Fotoğraflarının Dengelenmesi", "Tür": "Pafta", "Oran": 0.10, "Basamak": 2},
+        {"Sıra": 3, "İş Kalemi": "SYM, SAM, Nokta Bulutu, Gerçek Ortofoto ve Mesh", "Tür": "Pafta", "Oran": 0.27, "Basamak": 2},
+        {"Sıra": 4, "İş Kalemi": "3B Vektör Verilerin Fotogrametrik Üretimi", "Tür": "Pafta", "Oran": 0.30, "Basamak": 2},
+        {"Sıra": 5, "İş Kalemi": "3B Fotogrametrik Yapı Modellerinin Kaplanması", "Tür": "Pafta", "Oran": 0.27, "Basamak": 2},
+        {"Sıra": 6, "İş Kalemi": "Mimari Projelerden Vektörel Veri Üretimi", "Tür": "Bina", "Oran": 0.40, "Basamak": 2},
+        {"Sıra": 7, "İş Kalemi": "3B Mimari Yapı Konumlandırma ve Kontrolü", "Tür": "Bina", "Oran": 0.20, "Basamak": 3},
+        {"Sıra": 8, "İş Kalemi": "Güncel Verilerle TKGM CityGML Dönüştürmesi", "Tür": "Bina", "Oran": 0.35, "Basamak": 2},
+        {"Sıra": 9, "İş Kalemi": "Veri ve Modellerin İdareye Teslim Edilmesi", "Tür": "Pafta", "Oran": 0.06, "Basamak": 2},
+    ]
+    
+    for k in olusturma_kalemleri:
+        miktar = pafta_sayisi if k["Tür"] == "Pafta" else bina_sayisi
+        baz_fiyat = guncel_pafta if k["Tür"] == "Pafta" else guncel_bina
+        birim_fiyat = excel_yuvarla(baz_fiyat * k["Oran"], k["Basamak"])
+        toplam_fiyat = excel_yuvarla(birim_fiyat * miktar, 2)
+        
+        detaylar.append({
+            "Sıra No": k["Sıra"],
+            "İş Kalemi Açıklaması": k["İş Kalemi"],
+            "Birim": "Adet",
+            "Miktar": miktar,
+            "Birim Fiyat (TL)": birim_fiyat,
+            "Toplam Tutar (TL)": toplam_fiyat
+        })
 
-    # Excel İndirme
+# --- SONUÇ EKRANI VE EXCEL ÇIKTISI ---
+if len(detaylar) > 0:
+    df_detay = pd.DataFrame(detaylar)
+    
     st.markdown("---")
-    st.subheader("📄 Excel Çıktısı Al")
+    st.subheader("💰 Kalem Kalem Yaklaşık Maliyet Tablosu")
+    
+    # Ekranda güzel görünmesi için TL formatı ayarlama
+    st.dataframe(df_detay.style.format({
+        "Birim Fiyat (TL)": "{:,.3f} ₺",
+        "Toplam Tutar (TL)": "{:,.2f} ₺"
+    }), use_container_width=True, hide_index=True)
+
+    # Toplamların Paketlenmesi
+    toplam_ciplak = excel_yuvarla(df_detay["Toplam Tutar (TL)"].sum(), 2)
+    yuklenici_kari_tutari = excel_yuvarla(toplam_ciplak * (kar_orani / 100), 2)
+    genel_toplam_kdv_siz = toplam_ciplak + yuklenici_kari_tutari
+    
+    m_col1, m_col2, m_col3 = st.columns(3)
+    m_col1.metric("📌 ÇIPLAK MALİYET TOPLAMI", f"{toplam_ciplak:,.2f} TL")
+    m_col2.metric(f"📌 YÜKLENİCİ KÂRI (+%{int(kar_orani)})", f"{yuklenici_kari_tutari:,.2f} TL")
+    m_col3.metric("📌 YAKLAŞIK MALİYET (KDV HARİÇ)", f"{genel_toplam_kdv_siz:,.2f} TL")
+
+    # Excel Olarak Çıktı Alma İşlemleri
+    st.markdown("---")
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-        sonuc_df.to_excel(writer, index=False, sheet_name='Detayli_Maliyetler')
-        worksheet = writer.sheets['Detayli_Maliyetler']
-        for idx, col in enumerate(sonuc_df.columns):
-            worksheet.column_dimensions[chr(65 + idx)].width = 25 
+        df_detay.to_excel(writer, index=False, sheet_name='Kalem_Detaylari')
+        worksheet = writer.sheets['Kalem_Detaylari']
+        worksheet.column_dimensions['B'].width = 50
+        worksheet.column_dimensions['E'].width = 15
+        worksheet.column_dimensions['F'].width = 20
+        
+        # Toplam satırlarını Excel'in en altına ekleme
+        son_satir = len(df_detay) + 2
+        worksheet.cell(row=son_satir+1, column=5, value="Çıplak Maliyet:")
+        worksheet.cell(row=son_satir+1, column=6, value=toplam_ciplak)
+        
+        worksheet.cell(row=son_satir+2, column=5, value=f"Yüklenici Kârı (%{int(kar_orani)}):")
+        worksheet.cell(row=son_satir+2, column=6, value=yuklenici_kari_tutari)
+        
+        worksheet.cell(row=son_satir+3, column=5, value="NİHAİ MALİYET:")
+        worksheet.cell(row=son_satir+3, column=6, value=genel_toplam_kdv_siz)
             
     st.download_button(
-        label="📥 Tabloyu Excel Olarak İndir",
+        label="📥 Bu Tabloyu Excel Olarak İndir",
         data=buffer.getvalue(),
-        file_name=f"Yaklasik_Maliyet_{'Olusturma' if 'Oluşturma' in is_senaryosu else 'Iyilestirme'}.xlsx",
+        file_name=f"Kalem_Kalem_Maliyet_{'Iyilestirme' if 'İyileştirme' in is_senaryosu else 'Olusturma'}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         type="primary"
     )
