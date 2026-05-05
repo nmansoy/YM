@@ -1,57 +1,39 @@
 import streamlit as st
 import pandas as pd
-import requests
 import io
+import json
+import os
 
-# --- Veri Çekme Fonksiyonu (Hakedis.org'dan) ---
-@st.cache_data(ttl=86400) # Günde bir güncellenir ki siteyi yormasın
-def endeks_verilerini_cek():
-    url = "https://www.hakedis.org/endeksler/yi-ufe-yurtici-uretici-fiyat-endeksi"
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+# --- Veri Saklama (JSON) Fonksiyonları ---
+DATA_FILE = "endeksler.json"
+
+def endeksleri_yukle():
+    """Kayıtlı endeksleri JSON dosyasından okur, yoksa varsayılanları oluşturur."""
+    if not os.path.exists(DATA_FILE):
+        # Dosya yoksa ilk kurulum için varsayılan veriler
+        varsayilan_veriler = {
+            "Mart 2026": 4747.63,
+            "Şubat 2026": 4620.50,
+            "Ocak 2026": 4500.00
+        }
+        with open(DATA_FILE, "w", encoding="utf-8") as f:
+            json.dump(varsayilan_veriler, f, ensure_ascii=False, indent=4)
+        return varsayilan_veriler
     
-    try:
-        response = requests.get(url, headers=headers)
-        # Sitedeki tabloları Pandas ile otomatik oku
-        tablolar = pd.read_html(response.text)
-        df = tablolar[0]  # Genellikle sitedeki ilk tablo Yİ-ÜFE tablosudur
-        
-        endeks_sozluk = {}
-        
-        # Hakedis.org tablosunda ilk sütun Yıl, diğer sütunlar Aylardır
-        yil_sutunu = df.columns[0]
-        ay_sutunlari = df.columns[1:]
-        
-        # Tabloyu satır satır gezerek Yıl - Ay sözlüğü oluştur
-        for index, row in df.iterrows():
-            yil = str(row[yil_sutunu]).replace('.0', '').strip()
-            # Genel tabloda 'Yıl' veya boş olmayanları alalım
-            if yil.isdigit(): 
-                for ay in ay_sutunlari:
-                    deger = row[ay]
-                    # Boş olan veya çizgi çekilmiş ayları atla
-                    if pd.notna(deger) and str(deger).strip() not in ['-', '', 'NaN']:
-                        deger_str = str(deger).strip()
-                        # Türk tipi sayı formatını (4.747,63) evrensel formata (4747.63) çevirme
-                        if ',' in deger_str and '.' in deger_str:
-                            deger_str = deger_str.replace('.', '').replace(',', '.')
-                        elif ',' in deger_str:
-                            deger_str = deger_str.replace(',', '.')
-                        
-                        try:
-                            float_deger = float(deger_str)
-                            anahtar = f"{yil} - {ay}"
-                            endeks_sozluk[anahtar] = float_deger
-                        except ValueError:
-                            pass
-                            
-        return endeks_sozluk
-    except Exception as e:
-        return None
+    with open(DATA_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+def endeks_kaydet(donem_adi, endeks_degeri):
+    """Yeni girilen endeksi JSON dosyasına kalıcı olarak yazar."""
+    mevcut_veriler = endeksleri_yukle()
+    mevcut_veriler[donem_adi] = float(endeks_degeri)
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(mevcut_veriler, f, ensure_ascii=False, indent=4)
 
 # --- Sayfa Ayarları ---
 st.set_page_config(page_title="AYAP Maliyet Hesaplama", layout="wide")
 st.title("📊 İş Bazlı Yaklaşık Maliyet Hesaplama Aracı")
-st.markdown("Yİ-ÜFE verileri otomatik olarak Hakedis.org'dan çekilmektedir.")
+st.markdown("Yİ-ÜFE verilerinizi yan menüden seçebilir veya yeni ayların verilerini kalıcı olarak ekleyebilirsiniz.")
 
 # --- Sol Menü (Parametreler) ---
 st.sidebar.header("⚙️ Temel Parametreler")
@@ -69,28 +51,30 @@ st.sidebar.info(f"📌 **Şubat 2022 Endeksi:** `{base_endeks}`\n\n"
 st.sidebar.markdown("---")
 st.sidebar.markdown("*(Güncel Endeks Seçimi)*")
 
-# Hakedis'ten verileri çek
-endeks_verileri = endeks_verilerini_cek()
+# Kayıtlı Endeksleri Listele
+endeks_verileri = endeksleri_yukle()
+secenekler = list(endeks_verileri.keys())
+# En son eklenen en üstte görünsün diye listeyi ters çevirelim
+secenekler.reverse()
 
-guncel_endeks = 4747.63 # Varsayılan (hata olursa)
+secilen_donem = st.sidebar.selectbox("Kayıtlı Endeks Dönemi Seçin", options=secenekler)
+guncel_endeks = endeks_verileri[secilen_donem]
+st.sidebar.success(f"**{secilen_donem}** Endeksi: **{guncel_endeks}**")
 
-if endeks_verileri:
-    # Veriler başarıyla çekildiyse Selectbox göster
-    # Sözlükteki verileri tersten sıralayalım (En güncel yıllar/aylar üstte görünsün diye)
-    secenekler = list(endeks_verileri.keys())
-    secenekler.reverse()
+# --- YENİ ENDEKS EKLEME ALANI ---
+with st.sidebar.expander("➕ Yeni Endeks Ekle (Kalıcı Kayıt)"):
+    yeni_donem = st.text_input("Dönem Adı (Örn: Nisan 2026)")
+    yeni_deger = st.number_input("Endeks Değeri", min_value=0.0, format="%.2f", step=10.0)
     
-    secilen_donem = st.sidebar.selectbox("Endeks Dönemi (Hakedis.org)", options=secenekler)
-    guncel_endeks = endeks_verileri[secilen_donem]
-    st.sidebar.success(f"**{secilen_donem}** Endeksi: **{guncel_endeks}**")
-else:
-    st.sidebar.warning("Siteden veri çekilemedi. Lütfen manuel giriniz.")
-    guncel_endeks = st.sidebar.number_input("Güncel Endeks (Manuel)", value=4747.63, step=10.0, format="%.2f")
-
-# Acil durum için manuel giriş tik kutusu (Site güncellenirse fakat listede çıkmazsa diye)
-manuel_giris_mi = st.sidebar.checkbox("Endeksi Elle Yazmak İstiyorum")
-if manuel_giris_mi:
-    guncel_endeks = st.sidebar.number_input("Endeks Değerini Girin", value=float(guncel_endeks), step=10.0, format="%.2f")
+    if st.button("💾 Endeksi Kaydet"):
+        if yeni_donem.strip() == "":
+            st.error("Lütfen dönem adını boş bırakmayın.")
+        elif yeni_deger <= 0:
+            st.error("Geçerli bir endeks değeri girin.")
+        else:
+            endeks_kaydet(yeni_donem, yeni_deger)
+            st.success(f"'{yeni_donem}' dönemi başarıyla kaydedildi!")
+            st.rerun() # Sayfayı yenile ve listeyi güncelle
 
 st.sidebar.markdown("---")
 kar_orani = st.sidebar.number_input("Yüklenici Kârı (%)", value=20.0, step=1.0)
