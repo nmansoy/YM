@@ -12,9 +12,9 @@ def endeksleri_yukle():
     if not os.path.exists(DATA_FILE):
         # Dosya yoksa ilk kurulum için varsayılan veriler
         varsayilan_veriler = {
-            "Mart 2026": 4747.63,
-            "Şubat 2026": 4620.50,
-            "Ocak 2026": 4500.00
+            "Mart 2026": 5145.36,
+            "Şubat 2026": 5029.76,
+            "Ocak 2026": 4910.53
         }
         with open(DATA_FILE, "w", encoding="utf-8") as f:
             json.dump(varsayilan_veriler, f, ensure_ascii=False, indent=4)
