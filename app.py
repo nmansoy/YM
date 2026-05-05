@@ -12,9 +12,9 @@ def endeksleri_yukle():
     if not os.path.exists(DATA_FILE):
         # Dosya yoksa ilk kurulum için varsayılan veriler
         varsayilan_veriler = {
-            "Mart 2026": 5145.36,
-            "Şubat 2026": 5029.76,
-            "Ocak 2026": 4910.53
+            "Mart 2026": 4747.63,
+            "Şubat 2026": 4620.50,
+            "Ocak 2026": 4500.00
         }
         with open(DATA_FILE, "w", encoding="utf-8") as f:
             json.dump(varsayilan_veriler, f, ensure_ascii=False, indent=4)
@@ -30,6 +30,10 @@ def endeks_kaydet(donem_adi, endeks_degeri):
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(mevcut_veriler, f, ensure_ascii=False, indent=4)
 
+# Sabit Listeler
+AYLAR = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"]
+YILLAR = [str(y) for y in range(2022, 2035)] # 2022'den 2034'e kadar yıllar
+
 # --- Sayfa Ayarları ---
 st.set_page_config(page_title="AYAP Maliyet Hesaplama", layout="wide")
 st.title("📊 İş Bazlı Yaklaşık Maliyet Hesaplama Aracı")
@@ -37,6 +41,10 @@ st.markdown("Yİ-ÜFE verilerinizi yan menüden seçebilir veya yeni ayların ve
 
 # --- Sol Menü (Parametreler) ---
 st.sidebar.header("⚙️ Temel Parametreler")
+
+# Link Ekleme
+st.sidebar.markdown("🔗 **[Güncel Yİ-ÜFE Endekslerine Ulaşmak İçin Tıklayın (hakedis.org)](https://www.hakedis.org/endeksler/yi-ufe-yurtici-uretici-fiyat-endeksi)**")
+st.sidebar.markdown("---")
 
 # SABİT DEĞERLER (Kullanıcı değiştiremez)
 st.sidebar.markdown("*(2022 Şubat Baz Verileri - Sabit)*")
@@ -51,36 +59,52 @@ st.sidebar.info(f"📌 **Şubat 2022 Endeksi:** `{base_endeks}`\n\n"
 st.sidebar.markdown("---")
 st.sidebar.markdown("*(Güncel Endeks Seçimi)*")
 
-# Kayıtlı Endeksleri Listele
+# Kayıtlı Endeksleri Listele ve Seç
 endeks_verileri = endeksleri_yukle()
 secenekler = list(endeks_verileri.keys())
-# En son eklenen en üstte görünsün diye listeyi ters çevirelim
-secenekler.reverse()
+secenekler.reverse() # En son eklenen en üstte görünsün
 
-secilen_donem = st.sidebar.selectbox("Kayıtlı Endeks Dönemi Seçin", options=secenekler)
+secilen_donem = st.sidebar.selectbox("Hesaplamada Kullanılacak Endeksi Seçin", options=secenekler)
 guncel_endeks = endeks_verileri[secilen_donem]
 st.sidebar.success(f"**{secilen_donem}** Endeksi: **{guncel_endeks}**")
 
-# --- YENİ ENDEKS EKLEME ALANI ---
+# --- YENİ ENDEKS EKLEME ALANI (Seçmeli) ---
 with st.sidebar.expander("➕ Yeni Endeks Ekle (Kalıcı Kayıt)"):
-    yeni_donem = st.text_input("Dönem Adı (Örn: Nisan 2026)")
+    secili_ay = st.selectbox("Ay Seçin", AYLAR)
+    secili_yil = st.selectbox("Yıl Seçin", YILLAR, index=4) # Varsayılan olarak 2026 gelsin diye index=4
+    
     yeni_deger = st.number_input("Endeks Değeri", min_value=0.0, format="%.2f", step=10.0)
+    yeni_donem_adi = f"{secili_ay} {secili_yil}"
     
     if st.button("💾 Endeksi Kaydet"):
-        if yeni_donem.strip() == "":
-            st.error("Lütfen dönem adını boş bırakmayın.")
-        elif yeni_deger <= 0:
+        if yeni_deger <= 0:
             st.error("Geçerli bir endeks değeri girin.")
         else:
-            endeks_kaydet(yeni_donem, yeni_deger)
-            st.success(f"'{yeni_donem}' dönemi başarıyla kaydedildi!")
-            st.rerun() # Sayfayı yenile ve listeyi güncelle
+            endeks_kaydet(yeni_donem_adi, yeni_deger)
+            st.success(f"'{yeni_donem_adi}' dönemi başarıyla kaydedildi!")
+            st.rerun()
+
+st.sidebar.markdown("---")
+
+# --- KAYITLI ENDEKSLERİ YILA GÖRE LİSTELEME ---
+st.sidebar.subheader("📅 Yıla Göre Kayıtlı Endeksler")
+filtre_yil = st.sidebar.selectbox("Görüntülenecek Yılı Seçin", YILLAR, index=4)
+
+# Seçilen yıla ait verileri filtrele
+yil_verileri = {k: v for k, v in endeks_verileri.items() if filtre_yil in k}
+
+if yil_verileri:
+    df_yil = pd.DataFrame(list(yil_verileri.items()), columns=["Dönem", "Endeks Değeri"])
+    st.sidebar.dataframe(df_yil, hide_index=True, use_container_width=True)
+else:
+    st.sidebar.info(f"{filtre_yil} yılına ait kayıtlı endeks bulunmuyor.")
 
 st.sidebar.markdown("---")
 kar_orani = st.sidebar.number_input("Yüklenici Kârı (%)", value=20.0, step=1.0)
 kdv_orani = st.sidebar.number_input("KDV Oranı (%)", value=20.0, step=1.0)
 
 # --- 1. Adım: Güncel Katsayı ve Fiyat Hesaplaması ---
+# ... (Kodun geri kalanı tamamen aynı) ...
 katsayi = guncel_endeks / base_endeks
 guncel_bina = base_bina * katsayi
 guncel_pafta = base_pafta * katsayi
