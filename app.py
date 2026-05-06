@@ -11,26 +11,50 @@ def excel_yuvarla(deger, basamak=2):
     format_str = '1.' + '0' * basamak if basamak > 0 else '1'
     return float(Decimal(str(deger)).quantize(Decimal(format_str), rounding=ROUND_HALF_UP))
 
-# --- Veri Saklama (JSON) Fonksiyonları ---
+# --- Veri Saklama (JSON) ve Sıralama Fonksiyonları ---
 DATA_FILE = "endeksler.json"
+
+# Ayları kronolojik sıralamak için sözlük
+AYLAR_SOZLUK = {
+    "Ocak": 1, "Şubat": 2, "Mart": 3, "Nisan": 4, "Mayıs": 5, "Haziran": 6,
+    "Temmuz": 7, "Ağustos": 8, "Eylül": 9, "Ekim": 10, "Kasım": 11, "Aralık": 12
+}
+
+def kronolojik_sirala(endeks_dict):
+    """Sözlükteki dönemleri 'Ay Yıl' formatından okuyup tarihe göre en yeniden eskiye sıralar"""
+    def siralama_anahtari(item):
+        donem_adi = item[0]
+        try:
+            ay_isim, yil = donem_adi.split()
+            # Örn: "Mart 2026" -> 202603 sayısına çevirip sıralar
+            return int(yil) * 100 + AYLAR_SOZLUK.get(ay_isim, 0)
+        except:
+            return 0 # Format dışı bir şey yazılırsa en alta atar
+            
+    sirali_liste = sorted(endeks_dict.items(), key=siralama_anahtari, reverse=True)
+    return dict(sirali_liste)
 
 def endeksleri_yukle():
     if not os.path.exists(DATA_FILE):
         varsayilan_veriler = {"Mart 2026": 4747.63, "Şubat 2026": 4620.50}
         with open(DATA_FILE, "w", encoding="utf-8") as f:
             json.dump(varsayilan_veriler, f, ensure_ascii=False, indent=4)
-        return varsayilan_veriler
+        return kronolojik_sirala(varsayilan_veriler)
+    
     with open(DATA_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
+        ham_veri = json.load(f)
+        return kronolojik_sirala(ham_veri)
 
 def endeks_kaydet(donem_adi, endeks_degeri):
     mevcut_veriler = endeksleri_yukle()
     mevcut_veriler[donem_adi] = float(endeks_degeri)
+    # Kaydederken sıralı kaydet
+    sirali_veriler = kronolojik_sirala(mevcut_veriler)
     with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(mevcut_veriler, f, ensure_ascii=False, indent=4)
+        json.dump(sirali_veriler, f, ensure_ascii=False, indent=4)
 
-AYLAR = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"]
-YILLAR = [str(y) for y in range(2022, 2035)]
+AYLAR_LISTESI = list(AYLAR_SOZLUK.keys())
+YILLAR_LISTESI = [str(y) for y in range(2022, 2035)]
 
 # --- Sayfa Ayarları ---
 st.set_page_config(page_title="AYAP Detaylı Maliyet Hesaplama", layout="wide")
@@ -47,15 +71,15 @@ base_pafta = 1247.814
 
 endeks_verileri = endeksleri_yukle()
 secenekler = list(endeks_verileri.keys())
-secenekler.reverse()
 
-secilen_donem = st.sidebar.selectbox("Hesaplamada Kullanılacak Endeksi Seçin", options=secenekler)
+# Index 0 her zaman en güncel aydır (kronolojik_sirala sayesinde)
+secilen_donem = st.sidebar.selectbox("Hesaplamada Kullanılacak Endeksi Seçin", options=secenekler, index=0)
 guncel_endeks = endeks_verileri[secilen_donem]
-st.sidebar.success(f"**{secilen_donem}** Endeksi: **{guncel_endeks}**")
+st.sidebar.success(f"**{secilen_donem}** Seçili Endeks: **{guncel_endeks}**")
 
 with st.sidebar.expander("➕ Yeni Endeks Ekle"):
-    secili_ay = st.selectbox("Ay Seçin", AYLAR)
-    secili_yil = st.selectbox("Yıl Seçin", YILLAR, index=4)
+    secili_ay = st.selectbox("Ay Seçin", AYLAR_LISTESI)
+    secili_yil = st.selectbox("Yıl Seçin", YILLAR_LISTESI, index=4) # 2026 varsayılan
     yeni_deger = st.number_input("Endeks Değeri", min_value=0.0, format="%.2f", step=10.0)
     yeni_donem_adi = f"{secili_ay} {secili_yil}"
     
@@ -69,14 +93,23 @@ st.sidebar.markdown("---")
 kar_orani = st.sidebar.number_input("Yüklenici Kârı (%)", value=20.0, step=1.0)
 kdv_orani = st.sidebar.number_input("KDV Oranı (%)", value=20.0, step=1.0)
 
-# --- Güncel Katsayı ve Fiyat Hesaplaması ---
+# --- ALT SOL MENÜ: Tüm Endeksleri Gösterme ---
+st.sidebar.markdown("---")
+st.sidebar.subheader("📅 Sistemdeki Tüm Endeksler")
+df_tum_endeksler = pd.DataFrame(list(endeks_verileri.items()), columns=["Dönem", "Endeks Değeri"])
+st.sidebar.dataframe(df_tum_endeksler, hide_index=True, use_container_width=True)
+
+# --- ANA EKRAN: Güncel Katsayı ve Fiyatların Büyük Gösterimi ---
 katsayi = guncel_endeks / base_endeks
 guncel_bina = base_bina * katsayi
 guncel_pafta = base_pafta * katsayi
 
-st.info(f"📈 **Uygulanan Endeks Çarpanı:** `{katsayi:.5f}` | "
-        f"**Güncel Bina Baz Fiyatı:** `{guncel_bina:,.4f} TL` | "
-        f"**Güncel Pafta Baz Fiyatı:** `{guncel_pafta:,.4f} TL`")
+st.markdown("### 📈 Güncel Baz Fiyatlar ve Çarpan")
+m_col1, m_col2, m_col3 = st.columns(3)
+m_col1.metric("Uygulanan Endeks Çarpanı", f"{katsayi:.5f}")
+m_col2.metric("Güncel Bina Baz Fiyatı", f"{guncel_bina:,.4f} ₺")
+m_col3.metric("Güncel Pafta Baz Fiyatı", f"{guncel_pafta:,.4f} ₺")
+st.markdown("---")
 
 # --- Senaryo Seçimi ve Veri Girişi ---
 st.markdown("### 🛠️ İş Türü (Senaryo) Seçimi")
