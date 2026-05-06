@@ -65,14 +65,33 @@ st.sidebar.header("⚙️ Temel Parametreler")
 st.sidebar.markdown("🔗 **[Güncel Yİ-ÜFE Endeksleri (hakedis.org)](https://www.hakedis.org/endeksler/yi-ufe-yurtici-uretici-fiyat-endeksi)**")
 st.sidebar.markdown("---")
 
+# --- MESH ÜRETİM SEÇENEĞİ (YENİ) ---
+st.sidebar.subheader("🗺️ Pafta Üretim Tipi")
+mesh_durumu = st.sidebar.radio(
+    "Mesh model üretimi yapılacak mı?",
+    (
+        "✅ Mesh Üretimli (Mevcut)", 
+        "❌ Mesh Üretimsiz (İptal Edilen)"
+    )
+)
+
 base_endeks = 1210.60
 base_bina = 76.82
-base_pafta = 1247.814
+
+# Seçime göre dinamik Pafta Baz Fiyatı belirleme
+if "Üretimli" in mesh_durumu:
+    base_pafta = 1247.814
+    st.sidebar.info("💡 Standart Mesh üretim maliyeti dâhildir.")
+else:
+    base_pafta = 1155.384
+    st.sidebar.warning("⚠️ Mesh Üretiminden dolayı yapılan **%8 pafta başı maliyet artırımı iptal edilmiş** haliyle (1155.384 TL) hesaplanır.")
+
+st.sidebar.markdown("---")
 
 endeks_verileri = endeksleri_yukle()
 secenekler = list(endeks_verileri.keys())
 
-# Index 0 her zaman en güncel aydır (kronolojik_sirala sayesinde)
+# Index 0 her zaman en güncel aydır
 secilen_donem = st.sidebar.selectbox("Hesaplamada Kullanılacak Endeksi Seçin", options=secenekler, index=0)
 guncel_endeks = endeks_verileri[secilen_donem]
 st.sidebar.success(f"**{secilen_donem}** Seçili Endeks: **{guncel_endeks}**")
@@ -108,7 +127,7 @@ st.markdown("### 📈 Güncel Baz Fiyatlar ve Çarpan")
 m_col1, m_col2, m_col3 = st.columns(3)
 m_col1.metric("Uygulanan Endeks Çarpanı", f"{katsayi:.5f}")
 m_col2.metric("Güncel Bina Baz Fiyatı", f"{guncel_bina:,.4f} ₺")
-m_col3.metric("Güncel Pafta Baz Fiyatı", f"{guncel_pafta:,.4f} ₺")
+m_col3.metric("Güncel Pafta Baz Fiyatı", f"{guncel_pafta:,.4f} ₺", delta=mesh_durumu.split("(")[0].strip(), delta_color="normal")
 st.markdown("---")
 
 # --- Senaryo Seçimi ve Veri Girişi ---
