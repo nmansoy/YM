@@ -41,8 +41,37 @@ def endeks_kaydet(donem_adi, deger):
 AYLAR_LISTESI = list(AYLAR_SOZLUK.keys())
 YILLAR_LISTESI = [str(y) for y in range(2022, 2035)]
 
-# --- Sayfa Ayarları ---
+# --- Sayfa Ayarları ve CSS İlaveleri ---
 st.set_page_config(page_title="AYAP Maliyet Hesaplama", layout="wide")
+
+# Radyo butonlarının boyutunu büyüten özel CSS kodu
+st.markdown("""
+    <style>
+    .stRadio [role=radiogroup] {
+        display: flex;
+        justify-content: center;
+        gap: 30px;
+        background-color: #f0f2f6;
+        padding: 20px;
+        border-radius: 10px;
+        border: 2px solid #ff4b4b;
+    }
+    .stRadio label [data-testid="stMarkdownContainer"] p {
+        font-size: 22px !important;
+        font-weight: 900 !important;
+        color: #1f1f1f !important;
+    }
+    /* Karanlık mod uyumluluğu için */
+    @media (prefers-color-scheme: dark) {
+        .stRadio [role=radiogroup] {
+            background-color: #262730;
+        }
+        .stRadio label [data-testid="stMarkdownContainer"] p {
+            color: #ffffff !important;
+        }
+    }
+    </style>
+""", unsafe_allow_html=True)
 
 # --- ANA EKRAN BAŞLIK VE UYARI ---
 st.title("📊 AYAP Kalem Kalem Maliyet Hesaplama Aracı")
@@ -99,16 +128,23 @@ m_col2.metric("Güncel Bina B.F.", f"{guncel_bina:,.4f} ₺")
 m_col3.metric("Güncel Pafta B.F.", f"{guncel_pafta:,.4f} ₺", delta=mesh_durumu.split("(")[0].strip(), delta_color="normal")
 st.markdown("---")
 
-# --- Senaryo Seçimi ---
-st.markdown("### 🛠️ İş Türü (Senaryo) Seçimi")
-is_senaryosu = st.radio("Hangi tür iş hesaplanacak?", ("🔧 İyileştirme İşi (Kontrol ve Revizyon)", "🏗️ Oluşturma İşi (Sıfırdan Üretim)"), horizontal=True)
+# --- DEVASA SENARYO SEÇİM ALANI ---
+st.markdown("<h2 style='text-align: center; color: #ff4b4b; font-size: 36px;'>🛠️ İŞ TÜRÜNÜ SEÇİNİZ 🛠️</h2>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; font-size: 20px; margin-bottom: 20px;'>Aşağıdaki seçeneklerden hesaplama yapmak istediğiniz senaryoyu işaretleyin:</p>", unsafe_allow_html=True)
+
+is_senaryosu = st.radio(
+    "Senaryo Seçimi",
+    ("🔴 İYİLEŞTİRME İŞİ (Kontrol ve Revizyon)", "🟢 OLUŞTURMA İŞİ (Sıfırdan Üretim)"),
+    horizontal=True,
+    label_visibility="collapsed" # Varsayılan küçük başlığı gizledik, yerine üstteki dev html başlığı koyduk
+)
 st.markdown("---")
 
 tum_kalemler = []
 is_ciplak_toplam = 0.0
 
 # --- TEKLİ İŞ VERİ GİRİŞİ VE HESAPLAMA MOTORU ---
-if "İyileştirme" in is_senaryosu:
+if "İYİLEŞTİRME" in is_senaryosu:
     st.subheader("📋 İyileştirme İşi Miktarları")
     col1, col2, col3 = st.columns(3)
     pafta_sayisi = col1.number_input("Pafta Sayısı", min_value=0, value=7280)
@@ -209,7 +245,7 @@ if len(tum_kalemler) > 0:
     st.download_button(
         label="📥 Tabloyu Excel Olarak İndir",
         data=buffer.getvalue(),
-        file_name=f"Kalem_Maliyet_{'Iyilestirme' if 'İyileştirme' in is_senaryosu else 'Olusturma'}.xlsx",
+        file_name=f"Kalem_Maliyet_{'Iyilestirme' if 'İYİLEŞTİRME' in is_senaryosu else 'Olusturma'}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         type="primary"
     )
