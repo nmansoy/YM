@@ -188,7 +188,7 @@ if st.button("🚀 Hesapla ve Excel Şablonuna Aktar (sablon_ym.xlsx)"):
             # Belirlediğiniz hücrelere yazım
             ws[f"B{idx}"] = row["İş Adı"]
             ws[f"F{idx}"] = row["Pafta Sayısı"]
-            ws[f"H{idx}"] = ham_maliyet
+            ws[f"J{idx}"] = ham_maliyet
             ws[f"K{idx}"] = kar
             ws[f"L{idx}"] = toplam_maliyet
             
