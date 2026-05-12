@@ -44,7 +44,6 @@ YILLAR_LISTESI = [str(y) for y in range(2022, 2035)]
 # --- Sayfa Ayarları ve CSS İlaveleri ---
 st.set_page_config(page_title="AYAP Maliyet Hesaplama", layout="wide")
 
-# Radyo butonlarının boyutunu büyüten özel CSS kodu
 st.markdown("""
     <style>
     .stRadio [role=radiogroup] {
@@ -61,7 +60,6 @@ st.markdown("""
         font-weight: 900 !important;
         color: #1f1f1f !important;
     }
-    /* Karanlık mod uyumluluğu için */
     @media (prefers-color-scheme: dark) {
         .stRadio [role=radiogroup] {
             background-color: #262730;
@@ -130,20 +128,18 @@ st.markdown("---")
 
 # --- DEVASA SENARYO SEÇİM ALANI ---
 st.markdown("<h2 style='text-align: center; color: #ff4b4b; font-size: 36px;'>🛠️ İŞ TÜRÜNÜ SEÇİNİZ 🛠️</h2>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; font-size: 20px; margin-bottom: 20px;'>Aşağıdaki seçeneklerden hesaplama yapmak istediğiniz senaryoyu işaretleyin:</p>", unsafe_allow_html=True)
-
 is_senaryosu = st.radio(
     "Senaryo Seçimi",
     ("🔴 İYİLEŞTİRME İŞİ (Kontrol ve Revizyon)", "🟢 OLUŞTURMA İŞİ (Sıfırdan Üretim)"),
     horizontal=True,
-    label_visibility="collapsed" # Varsayılan küçük başlığı gizledik, yerine üstteki dev html başlığı koyduk
+    label_visibility="collapsed"
 )
 st.markdown("---")
 
 tum_kalemler = []
 is_ciplak_toplam = 0.0
 
-# --- TEKLİ İŞ VERİ GİRİŞİ VE HESAPLAMA MOTORU ---
+# --- VERİ GİRİŞİ ---
 if "İYİLEŞTİRME" in is_senaryosu:
     st.subheader("📋 İyileştirme İşi Miktarları")
     col1, col2, col3 = st.columns(3)
@@ -151,7 +147,6 @@ if "İYİLEŞTİRME" in is_senaryosu:
     toplam_bina = col2.number_input("Toplam Kontrol Edilecek Bina", min_value=0, value=172639)
     sifir_bina = col3.number_input("Sıfırdan Üretilecek Bina", min_value=0, value=55126)
     eski_bina = toplam_bina - sifir_bina
-    
     st.info(f"ℹ️ **Eski Model Bina Sayısı (Otomatik):** {int(eski_bina)}")
     
     kalemler = [
@@ -166,7 +161,6 @@ if "İYİLEŞTİRME" in is_senaryosu:
         {"Sıra": 9, "Ad": "TKGM CityGML Veri Modeline Dönüştürülmesi", "Tür": "Bina", "Oran": 0.35, "Mik": toplam_bina, "Bas": 2},
         {"Sıra": 10, "Ad": "Veri ve Modellerin İdareye Teslim Edilmesi", "Tür": "Pafta", "Oran": 0.06, "Mik": pafta_sayisi, "Bas": 2},
     ]
-
 else:
     st.subheader("📋 Oluşturma İşi Miktarları")
     col1, col2 = st.columns(2)
@@ -185,30 +179,22 @@ else:
         {"Sıra": 9, "Ad": "Veri ve Modellerin İdareye Teslim Edilmesi", "Tür": "Pafta", "Oran": 0.06, "Mik": pafta_sayisi, "Bas": 2},
     ]
 
-# Her kalem için hesaplama yap
+# Hesaplama Motoru
 for k in kalemler:
     baz = guncel_pafta if k["Tür"] == "Pafta" else guncel_bina
     bf = excel_yuvarla(baz * k["Oran"], k["Bas"])
-    toplam_tutar = excel_yuvarla(bf * k["Mik"], 2)
-    is_ciplak_toplam += toplam_tutar
-    
-    tum_kalemler.append({
-        "Sıra No": k["Sıra"], 
-        "İş Kalemi Açıklaması": k["Ad"], 
-        "Birim": "Adet", 
-        "Miktar": int(k["Mik"]), 
-        "Birim Fiyat (TL)": bf, 
-        "Toplam Tutar (TL)": toplam_tutar
-    })
+    tutar = excel_yuvarla(bf * k["Mik"], 2)
+    is_ciplak_toplam += tutar
+    tum_kalemler.append({"Sıra No": k["Sıra"], "İş Kalemi Açıklaması": k["Ad"], "Birim": "Adet", "Miktar": int(k["Mik"]), "Birim Fiyat (TL)": bf, "Toplam Tutar (TL)": tutar})
 
-# --- EKRAN ÇIKTILARI ---
-if len(tum_kalemler) > 0:
+# --- SONUÇLAR ---
+if tum_kalemler:
     df_detay = pd.DataFrame(tum_kalemler)
-    
     st.markdown("---")
     st.subheader("💰 Kalem Kalem Yaklaşık Maliyet Tablosu")
     st.dataframe(df_detay.style.format({"Birim Fiyat (TL)": "{:,.3f} ₺", "Toplam Tutar (TL)": "{:,.2f} ₺"}), use_container_width=True, hide_index=True)
 
+    # Maliyet Hesaplamaları
     is_ciplak = excel_yuvarla(is_ciplak_toplam, 2)
     is_kar = excel_yuvarla(is_ciplak * (kar_orani / 100), 2)
     is_kdvsiz = excel_yuvarla(is_ciplak + is_kar, 2)
@@ -216,36 +202,30 @@ if len(tum_kalemler) > 0:
     is_kdvli = excel_yuvarla(is_kdvsiz + is_kdv, 2)
     
     st.markdown("### 🧾 Maliyet Özet Paneli")
-    col1, col2, col3 = st.columns(3)
-    col1.metric("ÇIPLAK MALİYET (KÂRSIZ)", f"{is_ciplak:,.2f} TL")
-    col2.metric(f"YÜKLENİCİ KÂRI (+%{int(kar_orani)})", f"{is_kar:,.2f} TL")
-    col3.metric("Y. MALİYET (KDV HARİÇ)", f"{is_kdvsiz:,.2f} TL")
+    row1_col1, row1_col2, row1_col3 = st.columns(3)
+    row1_col1.metric("ÇIPLAK MALİYET (KÂRSIZ)", f"{is_ciplak:,.2f} TL")
+    row1_col2.metric(f"YÜKLENİCİ KÂRI (+%{int(kar_orani)})", f"{is_kar:,.2f} TL")
+    row1_col3.metric("YAKLAŞIK MALİYET (KDV HARİÇ)", f"{is_kdvsiz:,.2f} TL")
+
+    row2_col1, row2_col2, row2_col3 = st.columns(3)
+    row2_col1.metric(f"KDV TUTARI (%{int(kdv_orani)})", f"{is_kdv:,.2f} TL")
+    row2_col2.metric("TOPLAM MALİYET (KDV DAHİL)", f"{is_kdvli:,.2f} TL")
 
     # --- EXCEL OLUŞTURMA ---
     st.markdown("---")
     st.subheader("📄 Excel Çıktısı Al")
-    
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
         df_detay.to_excel(writer, index=False, sheet_name='Kalem_Detaylari')
-        ws_detay = writer.sheets['Kalem_Detaylari']
-        ws_detay.column_dimensions['B'].width = 60
-        ws_detay.column_dimensions['E'].width = 15
-        ws_detay.column_dimensions['F'].width = 20
-        
-        # Alt toplamları Excel'e yazdırma
-        son_satir = len(df_detay) + 2
-        ws_detay.cell(row=son_satir+1, column=5, value="Çıplak Maliyet:")
-        ws_detay.cell(row=son_satir+1, column=6, value=is_ciplak)
-        ws_detay.cell(row=son_satir+2, column=5, value=f"Yüklenici Kârı (%{int(kar_orani)}):")
-        ws_detay.cell(row=son_satir+2, column=6, value=is_kar)
-        ws_detay.cell(row=son_satir+3, column=5, value="NİHAİ MALİYET (KDV'siz):")
-        ws_detay.cell(row=son_satir+3, column=6, value=is_kdvsiz)
+        ws = writer.sheets['Kalem_Detaylari']
+        ws.column_dimensions['B'].width = 60
+        ws.column_dimensions['E'].width = 15
+        ws.column_dimensions['F'].width = 20
+        s = len(df_detay) + 3
+        ws.cell(row=s, column=5, value="Çıplak Maliyet:"); ws.cell(row=s, column=6, value=is_ciplak)
+        ws.cell(row=s+1, column=5, value=f"Kâr (%{int(kar_orani)}):"); ws.cell(row=s+1, column=6, value=is_kar)
+        ws.cell(row=s+2, column=5, value="MALİYET (KDV Hariç):"); ws.cell(row=s+2, column=6, value=is_kdvsiz)
+        ws.cell(row=s+3, column=5, value=f"KDV (%{int(kdv_orani)}):"); ws.cell(row=s+3, column=6, value=is_kdv)
+        ws.cell(row=s+4, column=5, value="GENEL TOPLAM (KDV Dahil):"); ws.cell(row=s+4, column=6, value=is_kdvli)
 
-    st.download_button(
-        label="📥 Tabloyu Excel Olarak İndir",
-        data=buffer.getvalue(),
-        file_name=f"Kalem_Maliyet_{'Iyilestirme' if 'İYİLEŞTİRME' in is_senaryosu else 'Olusturma'}.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        type="primary"
-    )
+    st.download_button(label="📥 Tabloyu Excel Olarak İndir", data=buffer.getvalue(), file_name=f"Kalem_Maliyet_{'Iyilestirme' if 'İYİLEŞTİRME' in is_senaryosu else 'Olusturma'}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", type="primary")
