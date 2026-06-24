@@ -156,8 +156,8 @@ if "İYİLEŞTİRME" in is_senaryosu:
         {"Sıra": 4, "Ad": "Eksik, Hatalı ve Yeni Yapılar 3B Vektör (%15)", "Tür": "Pafta", "Oran": 0.15, "Mik": pafta_sayisi, "Bas": 2},
         {"Sıra": 5, "Ad": "Yeni Yapıların Kaplanması ve CityGML Dönüşümü", "Tür": "Pafta", "Oran": 0.27, "Mik": pafta_sayisi, "Bas": 2},
         {"Sıra": 6, "Ad": "Mimari Projelerden Vektörel Veri Üretimi", "Tür": "Bina", "Oran": 0.40, "Mik": sifir_bina, "Bas": 2},
-        {"Sıra": 7, "Ad": "Eski Modellerin Kontrolü ve İyileştirilmesi", "Tür": "Bina", "Oran": 0.20, "Mik": eski_bina, "Bas": 3},
-        {"Sıra": 8, "Ad": "Karşılıklı Kontrol, Hataların Giderilmesi", "Tür": "Bina", "Oran": 0.20, "Mik": toplam_bina, "Bas": 3},
+        {"Sıra": 7, "Ad": "Eski Modellerin Kontrolü ve İyileştirilmesi", "Tür": "Bina", "Oran": 0.20, "Mik": eski_bina, "Bas": 2},
+        {"Sıra": 8, "Ad": "Karşılıklı Kontrol, Hataların Giderilmesi", "Tür": "Bina", "Oran": 0.20, "Mik": toplam_bina, "Bas": 2},
         {"Sıra": 9, "Ad": "TKGM CityGML Veri Modeline Dönüştürülmesi", "Tür": "Bina", "Oran": 0.35, "Mik": toplam_bina, "Bas": 2},
         {"Sıra": 10, "Ad": "Veri ve Modellerin İdareye Teslim Edilmesi", "Tür": "Pafta", "Oran": 0.06, "Mik": pafta_sayisi, "Bas": 2},
     ]
@@ -174,7 +174,7 @@ else:
         {"Sıra": 4, "Ad": "3B Vektör Verilerin Fotogrametrik Üretimi", "Tür": "Pafta", "Oran": 0.30, "Mik": pafta_sayisi, "Bas": 2},
         {"Sıra": 5, "Ad": "3B Fotogrametrik Yapı Modellerinin Kaplanması", "Tür": "Pafta", "Oran": 0.27, "Mik": pafta_sayisi, "Bas": 2},
         {"Sıra": 6, "Ad": "Mimari Projelerden Vektörel Veri Üretimi", "Tür": "Bina", "Oran": 0.40, "Mik": toplam_bina, "Bas": 2},
-        {"Sıra": 7, "Ad": "3B Mimari Yapı Konumlandırma ve Kontrolü", "Tür": "Bina", "Oran": 0.20, "Mik": toplam_bina, "Bas": 3},
+        {"Sıra": 7, "Ad": "3B Mimari Yapı Konumlandırma ve Kontrolü", "Tür": "Bina", "Oran": 0.20, "Mik": toplam_bina, "Bas": 2},
         {"Sıra": 8, "Ad": "Güncel Verilerle TKGM CityGML Dönüştürmesi", "Tür": "Bina", "Oran": 0.35, "Mik": toplam_bina, "Bas": 2},
         {"Sıra": 9, "Ad": "Veri ve Modellerin İdareye Teslim Edilmesi", "Tür": "Pafta", "Oran": 0.06, "Mik": pafta_sayisi, "Bas": 2},
     ]
